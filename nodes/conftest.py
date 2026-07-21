@@ -66,6 +66,15 @@ def unit_cube_stl(unit_cube):
 
 
 @pytest.fixture
+def unit_cube_ascii_stl(unit_cube):
+    """trimesh supports two STL variants, binary (unit_cube_stl above) and
+    ASCII text. The ASCII loader path needs charset_normalizer pinned in
+    requirements.txt (see nodes/_mesh.py / requirements.txt) — this fixture
+    exists to regression-test that path specifically."""
+    return trimesh.exchange.stl.export_stl_ascii(unit_cube).encode("utf-8")
+
+
+@pytest.fixture
 def unit_cube_obj(unit_cube):
     data = unit_cube.export(file_type="obj")
     return data.encode("utf-8") if isinstance(data, str) else data

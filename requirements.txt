@@ -9,3 +9,9 @@ networkx==3.6.1
 manifold3d==3.5.2
 fast-simplification==0.1.13
 pygltflib==1.16.5
+# trimesh's ASCII-STL/OBJ text loader (trimesh.util.decode_text) optionally
+# imports charset_normalizer to sniff encoding when a strict utf-8 decode
+# fails (e.g. non-UTF8 ASCII-STL bytes). MIT licensed. Without this pin,
+# parsing degrades gracefully to a clean ValueError (never a crash) but
+# incorrectly rejects otherwise-valid ASCII-STL input.
+charset-normalizer==3.4.9
