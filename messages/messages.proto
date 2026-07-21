@@ -149,7 +149,8 @@ message FillHolesOutput {
 // Input for the SimplifyMesh node.
 message SimplifyMeshInput {
   Mesh mesh = 1;
-  // Desired face count after decimation. Clamped to [4, original face count].
+  // Desired face count after decimation. Must be > 0 (0 or negative is
+  // rejected); otherwise clamped to [4, original face count].
   int32 target_face_count = 2;
 }
 
