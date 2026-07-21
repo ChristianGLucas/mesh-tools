@@ -1,0 +1,233 @@
+// Data contracts for christiangeorgelucas/mesh-tools.
+//
+// The design is built around ONE canonical envelope — `Mesh` — that every
+// mesh-producing node emits and every mesh-consuming node accepts as its
+// `mesh` field. That makes flows compose with a near-trivial adapter: the
+// edge between any two nodes is a single-field map (upstream `Mesh` ->
+// downstream `.mesh`). Other packages can `axiom import` this package and
+// speak the same `Mesh` envelope to drop into the same flows.
+//
+// All nodes wrap the MIT-licensed trimesh library (+ permissively-licensed
+// optional backends: manifold3d/Apache-2.0 for booleans, fast-simplification
+// /MIT for decimation, networkx/BSD-3-Clause, pygltflib/MIT for GLB). Ray
+// casting and point-containment nodes deliberately avoid trimesh's default
+// `rtree`-backed spatial index (rtree is LGPL-2.1) — see nodes/_mesh.py for
+// the pure-numpy broad-phase substitute that keeps the license tree 100%
+// permissive while trimesh's own ray/triangle math still does the real work.
+
+syntax = "proto3";
+
+package christiangeorgelucas.mesh_tools;
+
+// The canonical in-flight triangle mesh. Every node that returns a mesh
+// returns this, and every node that consumes a mesh accepts it. On output,
+// `data`, `format`, `vertex_count`, and `face_count` are always populated.
+// `url` is input-only: when `data` is empty and `url` is set, a node fetches
+// the mesh from that URL first — so any node can start a flow (given a URL)
+// or sit in the middle (receiving `data` from upstream).
+message Mesh {
+  // Raw mesh file bytes (base64-encoded over the JSON bridge). Always set on output.
+  bytes data = 1;
+  // Format of `data`: one of "STL", "OBJ", "PLY", "GLB". Case-insensitive on input.
+  string format = 2;
+  // Vertex count. Populated on output; ignored on input.
+  int32 vertex_count = 3;
+  // Face (triangle) count. Populated on output; ignored on input.
+  int32 face_count = 4;
+  // INPUT-ONLY. If `data` is empty, the node fetches the mesh from this URL.
+  string url = 5;
+}
+
+// A single point or vector in 3D space.
+message Point3 {
+  double x = 1;
+  double y = 2;
+  double z = 3;
+}
+
+// Input for the ConvertFormat node.
+message ConvertFormatInput {
+  // The mesh to re-encode (inline `data` or a `url` to fetch).
+  Mesh mesh = 1;
+  // Target format: "STL", "OBJ", "PLY", or "GLB".
+  string target_format = 2;
+}
+
+// Output of the InspectMesh node — a structural + topological summary.
+message InspectMeshOutput {
+  // Detected/normalized format ("STL", "OBJ", "PLY", "GLB").
+  string format = 1;
+  int32 vertex_count = 2;
+  int32 face_count = 3;
+  // Axis-aligned bounding box.
+  Point3 bounds_min = 4;
+  Point3 bounds_max = 5;
+  Point3 extents = 6;
+  // True when the mesh is a closed 2-manifold (every edge shared by exactly
+  // two faces) — a precondition for volume/inertia to be physically meaningful.
+  bool is_watertight = 7;
+  // True when face winding (normal direction) is consistent across the mesh.
+  bool is_winding_consistent = 8;
+  // Euler characteristic (V - E + F). 2 for a topological sphere.
+  int32 euler_number = 9;
+  // Number of disconnected connected-components (bodies) in the mesh.
+  int32 body_count = 10;
+}
+
+// Output of ComputeVolume. `volume` is the signed enclosed volume; it is only
+// physically meaningful when `is_watertight` is true.
+message VolumeOutput {
+  double volume = 1;
+  bool is_watertight = 2;
+}
+
+// Output of ComputeSurfaceArea.
+message SurfaceAreaOutput {
+  double area = 1;
+}
+
+// Output of ComputeCenterOfMass. Assumes uniform density; meaningful only
+// when `is_watertight` is true (otherwise trimesh falls back to a
+// vertex-mean approximation).
+message CenterOfMassOutput {
+  Point3 center_of_mass = 1;
+  bool is_watertight = 2;
+}
+
+// Output of ComputeMomentOfInertia — the 3x3 inertia tensor about the
+// center of mass, for a unit-density solid. Meaningful only when
+// `is_watertight` is true.
+message MomentOfInertiaOutput {
+  // Row-major 3x3 tensor: [Ixx, Ixy, Ixz, Iyx, Iyy, Iyz, Izx, Izy, Izz] (9 values).
+  repeated double tensor = 1;
+  Point3 center_of_mass = 2;
+  bool is_watertight = 3;
+}
+
+// Output of ComputeBoundingBox — the axis-aligned bounding box.
+message BoundingBoxOutput {
+  Point3 min = 1;
+  Point3 max = 2;
+  Point3 extents = 3;
+  double volume = 4;
+}
+
+// Output of ComputeOrientedBoundingBox — the minimum-volume oriented
+// bounding box.
+message OrientedBoundingBoxOutput {
+  // Row-major 4x4 homogeneous transform mapping the axis-aligned OBB frame
+  // (centered at origin, sized `extents`) to world space (16 values).
+  repeated double transform = 1;
+  Point3 extents = 2;
+  double volume = 3;
+}
+
+// Output of ComputeConvexHull.
+message ConvexHullOutput {
+  // The convex hull, as a new watertight mesh.
+  Mesh hull = 1;
+  double volume = 2;
+  double area = 3;
+}
+
+// Output of FixNormals.
+message FixNormalsOutput {
+  // The mesh with face winding/normals made consistently outward-facing.
+  Mesh mesh = 1;
+  bool is_winding_consistent = 2;
+}
+
+// Output of FillHoles.
+message FillHolesOutput {
+  // The mesh with boundary holes triangulated closed where possible.
+  Mesh mesh = 1;
+  // True when every hole was successfully filled.
+  bool fully_filled = 2;
+  bool is_watertight = 3;
+}
+
+// Input for the SimplifyMesh node.
+message SimplifyMeshInput {
+  Mesh mesh = 1;
+  // Desired face count after decimation. Clamped to [4, original face count].
+  int32 target_face_count = 2;
+}
+
+// Output of SimplifyMesh.
+message SimplifyMeshOutput {
+  Mesh mesh = 1;
+  int32 face_count = 2;
+}
+
+// Input shared by the BooleanUnion / BooleanIntersection / BooleanDifference
+// nodes. For BooleanDifference the result is `a - b`.
+message BooleanInput {
+  Mesh a = 1;
+  Mesh b = 2;
+}
+
+// Output shared by the boolean nodes.
+message BooleanOutput {
+  Mesh mesh = 1;
+  double volume = 2;
+  bool is_watertight = 3;
+}
+
+// Input shared by the SampleSurfacePoints / SampleVolumePoints nodes.
+message SamplePointsInput {
+  Mesh mesh = 1;
+  // Number of points to sample. Bounded to [1, 100000].
+  int32 count = 2;
+  // Optional deterministic seed. 0 means "use a fixed default seed" — sampling
+  // is always deterministic for a given (mesh, count, seed).
+  int64 seed = 3;
+}
+
+// Output of SampleSurfacePoints.
+message SurfacePointsOutput {
+  // Points sampled uniformly at random (by area) from the mesh surface.
+  repeated Point3 points = 1;
+  // Index of the face each corresponding point was sampled from.
+  repeated int32 face_indices = 2;
+}
+
+// Output of SampleVolumePoints. Requires a watertight mesh.
+message VolumePointsOutput {
+  // Points sampled uniformly at random from the mesh's enclosed volume
+  // (rejection sampling against the bounding box).
+  repeated Point3 points = 1;
+}
+
+// Input for the RayIntersect node.
+message RayIntersectInput {
+  Mesh mesh = 1;
+  // Ray origin points. Must be the same length as `directions`.
+  repeated Point3 origins = 2;
+  // Ray direction vectors (need not be normalized).
+  repeated Point3 directions = 3;
+}
+
+// Output of RayIntersect. Rays may produce zero, one, or multiple
+// intersection points each; `ray_indices`/`triangle_indices` correlate each
+// entry in `locations` back to its ray and the mesh face it hit.
+message RayIntersectOutput {
+  repeated Point3 locations = 1;
+  repeated int32 ray_indices = 2;
+  repeated int32 triangle_indices = 3;
+  // One entry per input ray: true if that ray hit the mesh at least once.
+  repeated bool ray_hit = 4;
+}
+
+// Input for the ContainsPoints node.
+message ContainsPointsInput {
+  Mesh mesh = 1;
+  repeated Point3 points = 2;
+}
+
+// Output of ContainsPoints. Requires a watertight mesh for a meaningful
+// result (returned regardless, with `is_watertight` reporting validity).
+message ContainsPointsOutput {
+  // One entry per input point: true if that point lies inside the mesh volume.
+  repeated bool inside = 1;
+  bool is_watertight = 2;
+}

@@ -1,0 +1,11 @@
+# Pinned for deterministic builds. All permissive licenses, verified from
+# source (see nodes/_mesh.py header + retrospective). Deliberately NOT
+# included: rtree (LGPL-2.1) and shapely/GEOS (LGPL-2.1) — see nodes/_mesh.py
+# for how ray/containment queries avoid needing rtree at all.
+trimesh==4.12.2
+numpy==2.5.1
+scipy==1.18.0
+networkx==3.6.1
+manifold3d==3.5.2
+fast-simplification==0.1.13
+pygltflib==1.16.5

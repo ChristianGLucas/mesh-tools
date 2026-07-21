@@ -1,0 +1,121 @@
+name: christiangeorgelucas/mesh-tools
+version: 0.1.0
+language: python
+description: >-
+  Composable Axiom 3D-mesh nodes (load/convert STL/OBJ/PLY/GLB, volume,
+  surface area, center of mass, moment of inertia, bounding boxes, convex
+  hull, repair normals/holes, decimate, boolean union/intersection/
+  difference, surface/volume point sampling, ray-mesh intersection,
+  point-in-mesh containment) over a single Mesh envelope, wrapping the
+  MIT-licensed trimesh library (with Apache-2.0 manifold3d for booleans and
+  MIT fast-simplification for decimation).
+nodes:
+    - name: ConvertFormat
+      input: ConvertFormatInput
+      output: Mesh
+      description: >-
+        Re-encode a mesh between STL, OBJ, PLY, and GLB without modifying
+        its geometry.
+    - name: InspectMesh
+      input: Mesh
+      output: InspectMeshOutput
+      description: >-
+        Parse a mesh and report a structural + topological summary: vertex
+        and face counts, axis-aligned bounds/extents, watertightness,
+        winding consistency, Euler characteristic, and connected-component
+        (body) count.
+    - name: ComputeVolume
+      input: Mesh
+      output: VolumeOutput
+      description: >-
+        Compute the signed enclosed volume of a mesh, plus whether it is
+        watertight (a precondition for the volume to be physically
+        meaningful).
+    - name: ComputeSurfaceArea
+      input: Mesh
+      output: SurfaceAreaOutput
+      description: Compute the total surface area (sum of triangle areas) of a mesh.
+    - name: ComputeCenterOfMass
+      input: Mesh
+      output: CenterOfMassOutput
+      description: >-
+        Compute the center of mass of a mesh assuming uniform density,
+        exact for a watertight mesh.
+    - name: ComputeMomentOfInertia
+      input: Mesh
+      output: MomentOfInertiaOutput
+      description: >-
+        Compute the 3x3 moment-of-inertia tensor about the center of mass
+        for a unit-density solid.
+    - name: ComputeBoundingBox
+      input: Mesh
+      output: BoundingBoxOutput
+      description: >-
+        Compute the axis-aligned bounding box of a mesh: min/max corners,
+        per-axis extents, and box volume.
+    - name: ComputeOrientedBoundingBox
+      input: Mesh
+      output: OrientedBoundingBoxOutput
+      description: >-
+        Compute the minimum-volume oriented bounding box of a mesh: its
+        world transform, extents, and volume.
+    - name: ComputeConvexHull
+      input: Mesh
+      output: ConvexHullOutput
+      description: >-
+        Compute the convex hull of a mesh's vertices as a new watertight
+        mesh, plus the hull's volume and surface area.
+    - name: FixNormals
+      input: Mesh
+      output: FixNormalsOutput
+      description: >-
+        Repair face winding so normals point consistently outward, using
+        adjacency-graph-based winding repair.
+    - name: FillHoles
+      input: Mesh
+      output: FillHolesOutput
+      description: >-
+        Triangulate and close boundary holes to make a mesh watertight
+        where possible.
+    - name: SimplifyMesh
+      input: SimplifyMeshInput
+      output: SimplifyMeshOutput
+      description: >-
+        Decimate a mesh toward a target face count using quadric-error-metric
+        simplification, preserving overall shape.
+    - name: BooleanUnion
+      input: BooleanInput
+      output: BooleanOutput
+      description: Compute the boolean union (a OR b) of two watertight meshes.
+    - name: BooleanIntersection
+      input: BooleanInput
+      output: BooleanOutput
+      description: Compute the boolean intersection (a AND b) of two watertight meshes.
+    - name: BooleanDifference
+      input: BooleanInput
+      output: BooleanOutput
+      description: Compute the boolean difference (a MINUS b) of two watertight meshes.
+    - name: SampleSurfacePoints
+      input: SamplePointsInput
+      output: SurfacePointsOutput
+      description: >-
+        Sample points uniformly at random (by triangle area) from a mesh's
+        surface, deterministic for a given seed.
+    - name: SampleVolumePoints
+      input: SamplePointsInput
+      output: VolumePointsOutput
+      description: >-
+        Sample points uniformly at random from a watertight mesh's enclosed
+        volume via seeded rejection sampling.
+    - name: RayIntersect
+      input: RayIntersectInput
+      output: RayIntersectOutput
+      description: >-
+        Cast rays against a mesh and report every intersection point,
+        the triangle each hit, and which rays hit at all.
+    - name: ContainsPoints
+      input: ContainsPointsInput
+      output: ContainsPointsOutput
+      description: >-
+        Test whether each of a set of points lies inside a watertight
+        mesh's enclosed volume.
