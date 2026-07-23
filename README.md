@@ -1,6 +1,6 @@
 # mesh-tools
 
-Composable [Axiom](https://axiom.dev) nodes for 3D triangle-mesh geometry —
+Composable [Axiom](https://axiomide.com) nodes for 3D triangle-mesh geometry —
 load, inspect, measure, repair, simplify, boolean-combine, sample, and
 ray/point-query STL/OBJ/PLY/GLB meshes. Built for the Axiom marketplace under
 the `christiangeorgelucas` handle.
