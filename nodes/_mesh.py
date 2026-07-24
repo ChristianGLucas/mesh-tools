@@ -92,31 +92,21 @@ def normalize_format(fmt: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Size/count caps — bound cost on untrusted input before we parse/process it.
+# Cost caps — payload size and overall mesh complexity are the platform's
+# job to bound, not this package's, and have been removed. What remains is a
+# genuine algorithmic-complexity bound specific to this package's own design
+# choice: ray/point-containment broad-phase here is a linear scan, O(rays *
+# faces) in the worst case, NOT the O(log n) an R-tree would give (see the
+# rtree-license note in this module's docstring — that index is deliberately
+# not a dependency). Both dimensions of that specific product are bounded so
+# a ray/contains query can't go quadratic; every other node (booleans,
+# simplification, hull, repair, ...) has no such package-specific complexity
+# cliff and is left unbounded.
 # ---------------------------------------------------------------------------
 
-MAX_MESH_BYTES = 25 * 1024 * 1024  # 25 MiB raw file
-MAX_FETCH_BYTES = MAX_MESH_BYTES
-MAX_VERTICES = 500_000
-MAX_FACES = 1_000_000
-# Ray/contains broad-phase is O(rays * faces) in the worst case (see
-# _BruteBoundsTree above) — bound both dimensions tighter for those nodes.
 MAX_RAY_QUERY_FACES = 100_000
 MAX_RAYS = 5_000
 MAX_QUERY_POINTS = 5_000
-MAX_SAMPLE_COUNT = 100_000
-
-
-def _check_mesh_size(raw: bytes) -> None:
-    if len(raw) > MAX_MESH_BYTES:
-        raise ValueError(f"mesh data too large: {len(raw)} bytes (max {MAX_MESH_BYTES})")
-
-
-def _check_mesh_counts(mesh: "trimesh.Trimesh") -> None:
-    if len(mesh.vertices) > MAX_VERTICES:
-        raise ValueError(f"mesh has too many vertices: {len(mesh.vertices)} (max {MAX_VERTICES})")
-    if len(mesh.faces) > MAX_FACES:
-        raise ValueError(f"mesh has too many faces: {len(mesh.faces)} (max {MAX_FACES})")
 
 
 # ---------------------------------------------------------------------------
@@ -156,9 +146,7 @@ def _fetch(url: str) -> bytes:
     _guard_not_private(parsed.hostname)
     req = urllib.request.Request(url, headers={"User-Agent": "axiom-mesh-tools/0.1"})
     with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310 (scheme+SSRF-guarded above)
-        raw = resp.read(MAX_MESH_BYTES + 1)
-    _check_mesh_size(raw)
-    return raw
+        return resp.read()
 
 
 # ---------------------------------------------------------------------------
@@ -167,15 +155,14 @@ def _fetch(url: str) -> bytes:
 
 
 def load_trimesh(mesh_msg) -> "trimesh.Trimesh":
-    """Resolve a canonical `Mesh` message into a decoded, size-bounded
-    trimesh.Trimesh. Uses inline `data` when present; otherwise fetches
-    `url`. Raises ValueError on missing/oversized/unparseable input."""
+    """Resolve a canonical `Mesh` message into a decoded trimesh.Trimesh.
+    Uses inline `data` when present; otherwise fetches `url`. Raises
+    ValueError on missing/unparseable input."""
     raw = bytes(mesh_msg.data)
     if not raw:
         if not mesh_msg.url:
             raise ValueError("Mesh has neither `data` nor `url`")
         raw = _fetch(mesh_msg.url)
-    _check_mesh_size(raw)
 
     fmt = normalize_format(mesh_msg.format)
     if not fmt:
@@ -208,7 +195,6 @@ def load_trimesh(mesh_msg) -> "trimesh.Trimesh":
     if len(mesh.vertices) == 0 or len(mesh.faces) == 0:
         raise ValueError("mesh has no vertices/faces")
 
-    _check_mesh_counts(mesh)
     return mesh
 
 
